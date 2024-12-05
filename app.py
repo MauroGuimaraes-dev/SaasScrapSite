@@ -337,6 +337,7 @@ with st.sidebar:
     registrar_key = st.button("Registrar API Key", use_container_width=False)
     
     if registrar_key and api_key:
+        os.environ["OPENAI_API_KEY"] = api_key
         st.session_state['api_registered'] = True
         st.success("✅ API Key foi registrada com sucesso!")
     elif registrar_key and not api_key:
@@ -395,8 +396,13 @@ if carregar_url:
                                 )
                                 
                                 # Criar chain de QA
+                                llm = ChatOpenAI(
+                                    model_name="gpt-3.5-turbo",
+                                    temperature=0,
+                                    api_key=api_key
+                                )
                                 qa_chain = RetrievalQA.from_chain_type(
-                                    llm=ChatOpenAI(temperature=0, model_name="gpt-3.5-turbo"),
+                                    llm=llm,
                                     chain_type="stuff",
                                     retriever=vectorstore.as_retriever(search_kwargs={"k": 3}),
                                     return_source_documents=True
