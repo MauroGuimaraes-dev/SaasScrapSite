@@ -243,9 +243,22 @@ st.markdown("""
 # Wrapper para o conteúdo principal
 st.markdown('<div class="main-content">', unsafe_allow_html=True)
 
-# Campo de entrada da URL e botão
+# Campo de entrada da URL
 url_input = st.text_input("URL do site:", key="url_input", help="Insira a URL do site que deseja analisar")
 carregar_url = st.button("Carregar URL", use_container_width=False)
+
+# Exibir sugestões de perguntas apenas se a URL ainda não foi processada
+if not st.session_state.get('url_processed', False):
+    st.markdown("""
+    <div style='background-color: #f0f2f6; padding: 20px; border-radius: 10px; margin: 20px 0;'>
+        <h3 style='color: #0e1117; margin-bottom: 15px;'>📝 Sugestões de Perguntas</h3>
+        <ol style='color: #0e1117; margin-left: 20px;'>
+            <li style='margin-bottom: 10px;'>Resuma o conteúdo em até 10 tópicos</li>
+            <li style='margin-bottom: 10px;'>Liste em tópicos a ideia principal</li>
+            <li style='margin-bottom: 10px;'>Resuma com até 300 palavras, o conteúdo</li>
+        </ol>
+    </div>
+    """, unsafe_allow_html=True)
 
 # Função para criar diretório temporário
 def get_temp_dir():
@@ -270,6 +283,19 @@ def normalize_url(url):
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
     return url
+
+# Função para verificar se uma URL está acessível
+def verify_url(url, session):
+    try:
+        response = session.get(url, timeout=10)
+        response.raise_for_status()  # Levanta exceção para status codes >= 400
+        return True, None
+    except requests.exceptions.ConnectionError:
+        return False, "Não foi possível conectar ao site. Verifique se a URL está correta."
+    except requests.exceptions.Timeout:
+        return False, "O site demorou muito para responder. Tente novamente mais tarde."
+    except requests.exceptions.RequestException as e:
+        return False, f"Erro ao acessar o site: {str(e)}"
 
 # Configuração do User-Agent e headers
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
@@ -299,30 +325,33 @@ class CustomWebLoader(WebBaseLoader):
     """Loader personalizado para carregar conteúdo de páginas web"""
     
     def __init__(self, web_path):
-        super().__init__(web_path)
+        # Normaliza a URL antes de inicializar
+        normalized_path = normalize_url(web_path)
+        super().__init__(normalized_path)
         self.session = get_session()
 
     def scrape(self):
         """Faz o scraping da página web"""
-        response = self.session.get(self.web_path, timeout=10)
-        response.encoding = response.apparent_encoding
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Remover scripts e estilos
-        for script in soup(["script", "style"]):
-            script.decompose()
-        
-        text = soup.get_text()
-        # Processar o texto para remover linhas em branco extras
-        lines = (line.strip() for line in text.splitlines())
-        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        text = ' '.join(chunk for chunk in chunks if chunk)
-        
-        return text
+        try:
+            response = self.session.get(self.web_path, headers=HEADERS)
+            response.raise_for_status()  # Levanta exceção para status codes >= 400
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Remove scripts e estilos
+            for script in soup(["script", "style"]):
+                script.decompose()
+            
+            return soup.get_text()
+        except Exception as e:
+            st.error(f"Erro ao acessar a URL: {str(e)}")
+            return None
 
     def load(self):
         """Carrega o conteúdo da página"""
         text = self.scrape()
+        if text is None or not text.strip():
+            return []
+        
         metadata = {"source": self.web_path}
         return [Document(page_content=text, metadata=metadata)]
 
@@ -368,16 +397,14 @@ if carregar_url:
             st.warning("👉 Por favor, insira sua API Key OpenAI na barra lateral e clique em 'Registrar API Key' antes de continuar.")
         else:
             try:
-                # Normalizar a URL antes de processar
-                url_normalizada = normalize_url(url_input)
                 with st.spinner('Carregando e processando o conteúdo da URL...'):
                     try:
-                        # Usar o loader customizado
-                        loader = CustomWebLoader(url_normalizada)
+                        # Usar o loader customizado (a normalização da URL é feita dentro do loader)
+                        loader = CustomWebLoader(url_input)
                         documents = loader.load()
                         
                         if not documents:
-                            st.error("Não foi possível extrair conteúdo da URL.")
+                            st.error("Não foi possível extrair conteúdo da URL. Verifique se a URL está correta.")
                         else:
                             # Dividir o texto em chunks
                             text_splitter = RecursiveCharacterTextSplitter(
