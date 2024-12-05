@@ -22,7 +22,7 @@ from langchain.chains import RetrievalQA
 from langchain_community.document_loaders import WebBaseLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import DocArrayInMemorySearch
 from langchain.schema import Document
 import tiktoken
 import tempfile
@@ -384,15 +384,14 @@ if carregar_url:
                             temp_dir = get_temp_dir()
                             
                             try:
-                                # Criar embeddings e armazenar no Chroma
+                                # Criar embeddings e armazenar no DocArrayInMemorySearch
                                 embeddings = HuggingFaceEmbeddings(
                                     model_name="all-MiniLM-L6-v2",
                                     model_kwargs={'device': 'cpu'}
                                 )
-                                vectorstore = Chroma.from_documents(
+                                vectorstore = DocArrayInMemorySearch.from_documents(
                                     documents=chunks,
-                                    embedding=embeddings,
-                                    persist_directory=temp_dir
+                                    embedding=embeddings
                                 )
                                 
                                 # Criar chain de QA
