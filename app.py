@@ -19,18 +19,11 @@ from requests.packages.urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQA
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
-try:
-    import faiss
-    from langchain_community.vectorstores import FAISS
-except ImportError:
-    raise ImportError(
-        "Could not import faiss python package. "
-        "Please install it with `pip install faiss-cpu`"
-    )
-from langchain.schema import Document
 from langchain_community.document_loaders import WebBaseLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain.schema import Document
 import tiktoken
 import tempfile
 import shutil
@@ -391,11 +384,15 @@ if carregar_url:
                             temp_dir = get_temp_dir()
                             
                             try:
-                                # Criar embeddings e armazenar no FAISS
-                                embeddings = HuggingFaceEmbeddings(model_name="intfloat/multilingual-e5-large")
-                                vectorstore = FAISS.from_documents(
+                                # Criar embeddings e armazenar no Chroma
+                                embeddings = HuggingFaceEmbeddings(
+                                    model_name="all-MiniLM-L6-v2",
+                                    model_kwargs={'device': 'cpu'}
+                                )
+                                vectorstore = Chroma.from_documents(
                                     documents=chunks,
-                                    embedding=embeddings
+                                    embedding=embeddings,
+                                    persist_directory=temp_dir
                                 )
                                 
                                 # Criar chain de QA
