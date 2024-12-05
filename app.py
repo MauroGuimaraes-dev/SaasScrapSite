@@ -256,13 +256,20 @@ def get_temp_dir():
 
 # Função para limpar diretório temporário
 def cleanup_temp_dir():
-    """Limpa o diretório temporário"""
-    if 'temp_dir' in st.session_state:
-        try:
-            shutil.rmtree(st.session_state.temp_dir, ignore_errors=True)
-            del st.session_state.temp_dir
-        except Exception:
-            pass
+    temp_dir = st.session_state.get('temp_dir')
+    if temp_dir and os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
+
+# Função para normalizar URLs
+def normalize_url(url):
+    if not url:
+        return url
+    # Remove espaços em branco
+    url = url.strip()
+    # Adiciona https:// se não houver protocolo
+    if not url.startswith(('http://', 'https://')):
+        url = 'https://' + url
+    return url
 
 # Configuração do User-Agent e headers
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
@@ -361,10 +368,12 @@ if carregar_url:
             st.warning("👉 Por favor, insira sua API Key OpenAI na barra lateral e clique em 'Registrar API Key' antes de continuar.")
         else:
             try:
+                # Normalizar a URL antes de processar
+                url_normalizada = normalize_url(url_input)
                 with st.spinner('Carregando e processando o conteúdo da URL...'):
                     try:
                         # Usar o loader customizado
-                        loader = CustomWebLoader(url_input)
+                        loader = CustomWebLoader(url_normalizada)
                         documents = loader.load()
                         
                         if not documents:
