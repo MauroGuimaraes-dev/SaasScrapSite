@@ -19,11 +19,18 @@ from requests.packages.urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQA
-from langchain_community.document_loaders import WebBaseLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
+try:
+    import faiss
+    from langchain_community.vectorstores import FAISS
+except ImportError:
+    raise ImportError(
+        "Could not import faiss python package. "
+        "Please install it with `pip install faiss-cpu`"
+    )
 from langchain.schema import Document
+from langchain_community.document_loaders import WebBaseLoader
 import tiktoken
 import tempfile
 import shutil
@@ -335,6 +342,12 @@ with st.sidebar:
     st.markdown("### Configuração da API OpenAI")
     api_key = st.text_input("API Key OpenAI:", type="password", help="Insira sua chave da API OpenAI")
     registrar_key = st.button("Registrar API Key", use_container_width=False)
+    
+    if registrar_key and api_key:
+        st.session_state['api_registered'] = True
+        st.success("✅ API Key foi registrada com sucesso!")
+    elif registrar_key and not api_key:
+        st.error("⚠️ Por favor, insira uma API Key antes de registrar.")
 
 # Inicialização do estado da sessão
 if 'api_registered' not in st.session_state:
@@ -378,12 +391,11 @@ if carregar_url:
                             temp_dir = get_temp_dir()
                             
                             try:
-                                # Criar embeddings e armazenar no Chroma
+                                # Criar embeddings e armazenar no FAISS
                                 embeddings = HuggingFaceEmbeddings(model_name="intfloat/multilingual-e5-large")
-                                vectorstore = Chroma.from_documents(
+                                vectorstore = FAISS.from_documents(
                                     documents=chunks,
-                                    embedding=embeddings,
-                                    persist_directory=temp_dir
+                                    embedding=embeddings
                                 )
                                 
                                 # Criar chain de QA
